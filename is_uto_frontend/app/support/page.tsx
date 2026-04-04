@@ -118,13 +118,21 @@ export default function SupportPage() {
 
   useEffect(() => { checkStatus(); }, []);
 
-  const handleExportCSV = () => {
-    const rows = ["task_id,priority,destination_uwi,task_type,shift,planned_duration_hours"];
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "tasks_export.csv"; a.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = async () => {
+    try {
+      const data = await api.tasks(undefined, 200);
+      const headers = "task_id,priority,destination_uwi,task_type,shift,planned_duration_hours,planned_start";
+      const rows = data.tasks.map((t) =>
+        [t.task_id, t.priority, t.destination_uwi, t.task_type, t.shift, t.planned_duration_hours, t.planned_start].join(",")
+      );
+      const blob = new Blob([[headers, ...rows].join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "tasks_export.csv"; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Ошибка загрузки задач");
+    }
   };
 
   return (
@@ -198,8 +206,8 @@ export default function SupportPage() {
                     {
                       icon: ExternalLink,
                       label: "Документация API",
-                      sub: "Swagger UI",
-                      action: () => window.open(`${BACKEND}/docs`, "_blank"),
+                      sub: "ReDoc UI",
+                      action: () => window.open(`${BACKEND}/redoc`, "_blank"),
                     },
                     {
                       icon: ExternalLink,
