@@ -1,0 +1,69 @@
+export interface VehicleUnit {
+  wialon_id: number;
+  name: string;
+  registration: string;
+  eta_minutes: number;
+  distance_km: number;
+  score: number;
+  reason: string;
+  is_free: boolean;
+  compatible: boolean;
+}
+
+export interface RecommendResponse {
+  task_id: string;
+  destination_uwi: string;
+  dest_node: number;
+  units: VehicleUnit[];
+}
+
+export interface RouteResponse {
+  distance_km: number;
+  time_minutes: number;
+  nodes: number[];
+  coords: [number, number][];
+  from_node: number;
+  to_node: number;
+}
+
+export interface FleetVehicle {
+  wialon_id: number;
+  name: string;
+  registration: string;
+  start_node: number;
+  start_lon: number;
+  start_lat: number;
+  free_at_minutes: number;
+  avg_speed_kmh: number;
+  skills_count: number;
+  vehicle_type_code: string;
+}
+
+export interface Task {
+  task_id: string;
+  priority: "high" | "medium" | "low";
+  planned_start: string;
+  planned_duration_hours: number;
+  destination_uwi: string;
+  task_type: string;
+  shift: string;
+  dest_node: number | null;
+  dest_lon: number | null;
+  dest_lat: number | null;
+}
+
+export interface HealthResponse {
+  status: string;
+  vehicles: number;
+  tasks: number;
+  wells: number;
+}
+
+export interface GroupingResult {
+  groups: string[][];
+  strategy_summary: string;
+  total_distance_km: number;
+  baseline_distance_km: number;
+  savings_percent: number;
+  reason: string;
+}
