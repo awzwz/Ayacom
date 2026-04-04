@@ -18,6 +18,7 @@ def get_pool() -> pool.SimpleConnectionPool:
             dbname=DB_NAME,
             user=DB_USER,
             password=DB_PASS,
+            sslmode="require",
         )
     return _pool
 
