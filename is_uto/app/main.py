@@ -20,9 +20,11 @@ Endpoints:
   GET  /health               — health check
 """
 
+import asyncio
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,20 +58,17 @@ app.add_middleware(
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
 
-@app.on_event("startup")
-async def startup():
-    logger.info("=== IS УТО startup ===")
+def _load_all_data():
+    """Heavy synchronous data loading — runs in a thread pool."""
+    logger.info("=== IS УТО data loading started ===")
     t0 = time.time()
 
-    # 1. Load graph
-    load_graph()
-    logger.info("Graph loaded in %.2fs", time.time() - t0)
-
-    # 2. Load wells
     from app.api import recommendations as rec_api
     from app.api import route as route_api
     from app.api import multitask as mt_api
-    from app.visualization.map_viz import render_fleet_map
+
+    load_graph()
+    logger.info("Graph loaded in %.2fs", time.time() - t0)
 
     wells = load_wells()
     rec_api.set_wells(wells)
@@ -77,11 +76,9 @@ async def startup():
     mt_api.set_wells(wells)
     app.state.wells = wells
 
-    # 3. Build fleet state
     fleet = build_fleet_state()
     app.state.fleet = fleet
 
-    # 4. Load tasks and snap destinations
     try:
         tasks = load_tasks()
         for t in tasks:
@@ -94,10 +91,24 @@ async def startup():
         app.state.tasks = tasks
         logger.info("Loaded %d tasks", len(tasks))
     except FileNotFoundError:
-        logger.warning("tasks.csv not found — run mock_generator.py first")
+        logger.warning("tasks.csv not found")
         app.state.tasks = []
 
-    logger.info("=== Startup complete in %.2fs ===", time.time() - t0)
+    app.state.ready = True
+    logger.info("=== IS УТО ready in %.2fs ===", time.time() - t0)
+
+
+@app.on_event("startup")
+async def startup():
+    # Initialize empty state so /health responds immediately
+    app.state.fleet = {}
+    app.state.tasks = []
+    app.state.wells = {}
+    app.state.ready = False
+    # Load data in background thread — does not block uvicorn startup
+    loop = asyncio.get_event_loop()
+    executor = ThreadPoolExecutor(max_workers=1)
+    loop.run_in_executor(executor, _load_all_data)
 
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
@@ -136,8 +147,9 @@ def assign_vehicle(req: AssignRequest):
 def health():
     fleet = getattr(app.state, "fleet", {})
     tasks = getattr(app.state, "tasks", [])
+    ready = getattr(app.state, "ready", False)
     return {
-        "status": "ok",
+        "status": "ok" if ready else "loading",
         "vehicles": len(fleet),
         "tasks": len(tasks),
         "wells": len(getattr(app.state, "wells", {})),
