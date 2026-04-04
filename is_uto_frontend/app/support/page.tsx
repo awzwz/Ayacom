@@ -10,6 +10,8 @@ import Sidebar from "@/components/Sidebar";
 import { api } from "@/lib/api";
 import type { HealthResponse } from "@/lib/types";
 
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 const MOCK_LOG = [
   { time: "09:42:15", level: "info", msg: "Граф дорог загружен: 4624 узла, 19031 рёбер" },
   { time: "09:42:18", level: "info", msg: "Парк техники: 126 единиц инициализировано" },
@@ -163,14 +165,14 @@ export default function SupportPage() {
                   label="Бэкенд API"
                   value={latency ? `${latency} мс` : health ? "OK" : "Недоступен"}
                   ok={health !== null}
-                  sub="localhost:8000"
+                  sub={BACKEND}
                 />
                 <DiagRow
                   icon={Database}
                   label="База данных"
-                  value={health ? "95.47.96.41:5432" : "—"}
+                  value={health ? "Neon PostgreSQL" : "—"}
                   ok={health ? true : null}
-                  sub="mock_uto / readonly_user"
+                  sub="neondb / cloud"
                 />
                 <DiagRow
                   icon={GitBranch}
@@ -197,13 +199,13 @@ export default function SupportPage() {
                       icon: ExternalLink,
                       label: "Документация API",
                       sub: "Swagger UI",
-                      action: () => window.open("http://localhost:8000/docs", "_blank"),
+                      action: () => window.open(`${BACKEND}/docs`, "_blank"),
                     },
                     {
                       icon: ExternalLink,
                       label: "Карта флота",
                       sub: "Folium HTML",
-                      action: () => window.open("http://localhost:8000/api/map/fleet", "_blank"),
+                      action: () => window.open(`${BACKEND}/api/map/fleet`, "_blank"),
                     },
                     {
                       icon: FileDown,
@@ -215,7 +217,7 @@ export default function SupportPage() {
                       icon: Activity,
                       label: "Health Check",
                       sub: "JSON ответ",
-                      action: () => window.open("http://localhost:8000/health", "_blank"),
+                      action: () => window.open(`${BACKEND}/health`, "_blank"),
                     },
                   ].map(({ icon: Icon, label, sub, action }) => (
                     <button
