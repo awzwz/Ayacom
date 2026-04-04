@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: ./is_uto
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./is_uto_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
