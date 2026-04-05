@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Database, Cpu, User, RefreshCw, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import { Database, Cpu, User, RefreshCw, CheckCircle, XCircle, RotateCcw, Pencil, X } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { api } from "@/lib/api";
 import type { HealthResponse } from "@/lib/types";
@@ -43,6 +43,17 @@ export default function SettingsPage() {
   const [mode, setMode] = useState(DEFAULTS.mode);
   const [solverTime, setSolverTime] = useState(DEFAULTS.solverTime);
   const [saved, setSaved] = useState(false);
+
+  // Profile state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profile, setProfile] = useState({ name: "Abdulin Aziz", role: "Менеджер логистики", email: "a.abdulin@uto.kz", org: "АО НК «КазМунайГаз»" });
+  const [profileDraft, setProfileDraft] = useState(profile);
+
+  const profileInitials = profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  const startEditProfile = () => { setProfileDraft(profile); setIsEditingProfile(true); };
+  const cancelEditProfile = () => setIsEditingProfile(false);
+  const saveProfile = () => { setProfile(profileDraft); setIsEditingProfile(false); };
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => {});
@@ -270,26 +281,65 @@ export default function SettingsPage() {
             <div className="max-w-2xl space-y-4">
               {/* Avatar */}
               <div className="rounded-2xl p-6" style={{ background: "#161b22", border: "1px solid #21262d" }}>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold" style={{ background: "#1f6feb", color: "#fff" }}>
-                    AA
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold" style={{ background: "#1f6feb", color: "#fff" }}>
+                      {profileInitials}
+                    </div>
+                    <div>
+                      <div className="font-bold" style={{ color: "#e6edf3" }}>{profile.name}</div>
+                      <div className="text-sm mt-0.5" style={{ color: "#8b949e" }}>{profile.role}</div>
+                      <div className="text-xs mt-1 font-mono" style={{ color: "#484f58" }}>{profile.email}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-bold" style={{ color: "#e6edf3" }}>Abdulin Aziz</div>
-                    <div className="text-sm mt-0.5" style={{ color: "#8b949e" }}>Менеджер логистики</div>
-                    <div className="text-xs mt-1 font-mono" style={{ color: "#484f58" }}>a.abdulin@uto.kz</div>
-                  </div>
+                  {!isEditingProfile ? (
+                    <button
+                      onClick={startEditProfile}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all"
+                      style={{ background: "#21262d", color: "#8b949e", border: "1px solid #30363d" }}
+                    >
+                      <Pencil size={12} /> Редактировать
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveProfile}
+                        className="px-4 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: "#d4a017", color: "#0d1117" }}
+                      >
+                        Сохранить
+                      </button>
+                      <button
+                        onClick={cancelEditProfile}
+                        className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: "#21262d", color: "#8b949e", border: "1px solid #30363d" }}
+                      >
+                        <X size={12} /> Отмена
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-3">
-                  {[
-                    { label: "Имя", value: "Abdulin Aziz" },
-                    { label: "Роль", value: "Менеджер логистики" },
-                    { label: "Email", value: "a.abdulin@uto.kz" },
-                    { label: "Организация", value: "АО НК «КазМунайГаз»" },
-                  ].map(({ label, value }) => (
+                  {(
+                    [
+                      { label: "Имя", key: "name" },
+                      { label: "Роль", key: "role" },
+                      { label: "Email", key: "email" },
+                      { label: "Организация", key: "org" },
+                    ] as { label: string; key: keyof typeof profile }[]
+                  ).map(({ label, key }) => (
                     <div key={label} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: "#0d1117", border: "1px solid #21262d" }}>
                       <span className="text-xs" style={{ color: "#484f58" }}>{label}</span>
-                      <span className="text-xs font-semibold" style={{ color: "#8b949e" }}>{value}</span>
+                      {isEditingProfile ? (
+                        <input
+                          className="text-xs font-semibold bg-transparent outline-none text-right w-56 rounded px-2 py-0.5"
+                          style={{ color: "#e6edf3", border: "1px solid #30363d", background: "#161b22" }}
+                          value={profileDraft[key]}
+                          onChange={(e) => setProfileDraft((d) => ({ ...d, [key]: e.target.value }))}
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold" style={{ color: "#8b949e" }}>{profile[key]}</span>
+                      )}
                     </div>
                   ))}
                 </div>
