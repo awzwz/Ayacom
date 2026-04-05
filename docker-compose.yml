@@ -12,3 +12,5 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    environment:
+      - UTO_API_ORIGIN=http://backend:8000

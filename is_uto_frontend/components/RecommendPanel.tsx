@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Clock, MapPin, Zap, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
-import type { VehicleUnit, RecommendResponse, RouteResponse } from "@/lib/types";
+import type { VehicleUnit, RecommendResponse, RouteResponse, Task } from "@/lib/types";
 import clsx from "clsx";
 
 interface Props {
@@ -16,13 +16,11 @@ const PRIORITY_LABELS: Record<string, string> = { high: "Высокий", medium
 const TASK_TYPES = [
   "103", "104", "105", "201", "202", "301", "302", "401", "501",
 ];
-const UWIS = [
-  "ASA_0003", "ASA_0015", "ASA_0027", "ASA_0041", "ZHT_0001",
-  "ZHT_0012", "ZHT_0025", "ZHT_0038", "ZHT_0050", "ZHT_0063",
-];
 
 export default function RecommendPanel({ onRoute, onAssign }: Props) {
-  const [uwi, setUwi] = useState("ASA_0003");
+  const [uwis, setUwis] = useState<string[]>([]);
+  const [uwi, setUwi] = useState("");
+  const [tasksByUwi, setTasksByUwi] = useState<Record<string, Task>>({});
   const [priority, setPriority] = useState<"high" | "medium" | "low">("high");
   const [shift, setShift] = useState<"day" | "night">("day");
   const [taskType, setTaskType] = useState("103");
@@ -32,16 +30,37 @@ export default function RecommendPanel({ onRoute, onAssign }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [assigned, setAssigned] = useState<number | null>(null);
 
+  useEffect(() => {
+    api.tasks(undefined, 200).then((r) => {
+      const valid = r.tasks.filter((t) => t.dest_lat && t.dest_lon);
+      // Index first task per UWI to reuse its planned_start, task_type, shift
+      const byUwi: Record<string, Task> = {};
+      for (const t of valid) {
+        if (!byUwi[t.destination_uwi]) byUwi[t.destination_uwi] = t;
+      }
+      const unique = Object.keys(byUwi).sort();
+      setTasksByUwi(byUwi);
+      setUwis(unique);
+      if (unique.length > 0) {
+        const first = byUwi[unique[0]];
+        setUwi(unique[0]);
+        setShift(first.shift as "day" | "night");
+        setTaskType(first.task_type);
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleFind = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
+      const task = tasksByUwi[uwi];
       const res = await api.recommend({
-        task_id: `T-${Date.now()}`,
+        task_id: task?.task_id ?? `T-${Date.now()}`,
         priority,
         destination_uwi: uwi,
-        planned_start: new Date().toISOString().slice(0, 19),
+        planned_start: task?.planned_start ?? "2025-02-20T08:00:00",
         duration_hours: duration,
         shift,
         task_type: taskType,
@@ -90,11 +109,19 @@ export default function RecommendPanel({ onRoute, onAssign }: Props) {
           <label className="block text-xs mb-1" style={{ color: "#8b949e" }}>UWI объекта</label>
           <select
             value={uwi}
-            onChange={(e) => setUwi(e.target.value)}
+            onChange={(e) => {
+              const selected = e.target.value;
+              setUwi(selected);
+              const t = tasksByUwi[selected];
+              if (t) {
+                setShift(t.shift as "day" | "night");
+                setTaskType(t.task_type);
+              }
+            }}
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
           >
-            {UWIS.map((u) => (
+            {uwis.map((u) => (
               <option key={u} value={u}>{u}</option>
             ))}
           </select>

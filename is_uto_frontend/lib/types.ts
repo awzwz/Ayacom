@@ -59,6 +59,39 @@ export interface HealthResponse {
   wells: number;
 }
 
+export interface SimLeg {
+  task_id: string;
+  depart_at: number;   // minutes from sim start
+  arrive_at: number;
+  work_end_at: number;
+  coords: [number, number][]; // [lon, lat]
+}
+
+export interface SimVehicle {
+  wialon_id: number;
+  name: string;
+  start_lat: number;
+  start_lon: number;
+  legs: SimLeg[];
+}
+
+export interface SimTask {
+  task_id: string;
+  priority: "high" | "medium" | "low";
+  dest_lat: number;
+  dest_lon: number;
+  assigned_to: number;
+  arrive_at: number;
+  work_end_at: number;
+}
+
+export interface SimulationPlan {
+  total_duration_minutes: number;
+  vehicles: SimVehicle[];
+  tasks: SimTask[];
+  unassigned: string[];
+}
+
 export interface GroupingResult {
   groups: string[][];
   strategy_summary: string;

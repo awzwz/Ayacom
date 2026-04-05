@@ -83,6 +83,7 @@ def _load_all_data():
     from app.api import recommendations as rec_api
     from app.api import route as route_api
     from app.api import multitask as mt_api
+    from app.api import simulation as sim_api
 
     load_graph()
     logger.info("Graph loaded in %.2fs", time.time() - t0)
@@ -105,6 +106,8 @@ def _load_all_data():
                 t.dest_lon = well["lon"]
                 t.dest_lat = well["lat"]
         mt_api.set_tasks(tasks)
+        sim_api.set_tasks(tasks)
+        sim_api.set_wells(wells)
         app.state.tasks = tasks
         logger.info("Loaded %d tasks", len(tasks))
     except FileNotFoundError:
@@ -133,10 +136,12 @@ async def startup():
 from app.api.recommendations import router as rec_router
 from app.api.route import router as route_router
 from app.api.multitask import router as mt_router
+from app.api.simulation import router as sim_router
 
 app.include_router(rec_router, prefix="/api", tags=["Recommendations"])
 app.include_router(route_router, prefix="/api", tags=["Route"])
 app.include_router(mt_router, prefix="/api", tags=["Multi-task"])
+app.include_router(sim_router, prefix="/api", tags=["Simulation"])
 
 
 # ─── Utility endpoints ────────────────────────────────────────────────────────

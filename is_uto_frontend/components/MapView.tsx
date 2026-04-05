@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FleetVehicle, Task, RouteResponse } from "@/lib/types";
+import type { SimVehiclePosition, TaskStatus } from "@/hooks/useSimulation";
 
 interface Props {
   vehicles: FleetVehicle[];
@@ -10,15 +11,33 @@ interface Props {
   highlightVehicleId?: number | null;
   onVehicleClick?: (v: FleetVehicle) => void;
   onTaskClick?: (t: Task) => void;
+  /** When `stamp` changes, map animates to the point (e.g. global search). */
+  flyTo?: { lat: number; lon: number; zoom?: number; stamp: number } | null;
+  // Simulation props
+  simVehiclePositions?: Record<number, SimVehiclePosition>;
+  simTaskStatuses?: Record<string, TaskStatus>;
+  simRoutes?: [number, number][][];
 }
 
 // Leaflet must be imported client-side only
-export default function MapView({ vehicles, tasks, route, highlightVehicleId, onVehicleClick, onTaskClick }: Props) {
+export default function MapView({
+  vehicles,
+  tasks,
+  route,
+  highlightVehicleId,
+  onVehicleClick,
+  onTaskClick,
+  flyTo,
+  simVehiclePositions,
+  simTaskStatuses,
+  simRoutes,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const vehicleLayerRef = useRef<any>(null);
   const taskLayerRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
+  const simRouteLayerRef = useRef<any>(null);
   const fittedRef = useRef(false);
   const [L, setL] = useState<any>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -63,6 +82,7 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
     L.control.attribution({ prefix: false }).addTo(map);
 
     mapRef.current = map;
+    simRouteLayerRef.current = L.layerGroup().addTo(map); // below vehicles
     vehicleLayerRef.current = L.layerGroup().addTo(map);
     taskLayerRef.current = L.layerGroup().addTo(map);
     routeLayerRef.current = L.layerGroup().addTo(map);
@@ -84,50 +104,63 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
     fittedRef.current = true;
   }, [mapReady, vehicles.length]);
 
+  // Draw simulation routes (all at once, behind vehicles)
+  useEffect(() => {
+    if (!L || !simRouteLayerRef.current) return;
+    simRouteLayerRef.current.clearLayers();
+    if (!simRoutes || simRoutes.length === 0) return;
+
+    simRoutes.forEach((coords) => {
+      const latlngs = coords.map(([lon, lat]) => [lat, lon] as [number, number]);
+      L.polyline(latlngs, { color: "#d4a017", weight: 2, opacity: 0.35, dashArray: "6 5" })
+        .addTo(simRouteLayerRef.current);
+    });
+  }, [L, simRoutes]);
+
   // Draw vehicles
   useEffect(() => {
     if (!L || !vehicleLayerRef.current || vehicles.length === 0) return;
     vehicleLayerRef.current.clearLayers();
 
     vehicles.forEach((v) => {
-      if (!v.start_lat || !v.start_lon) return;
-      const isHighlighted = highlightVehicleId === v.wialon_id;
-      const isFree = v.free_at_minutes === 0;
+      // In simulation mode, use sim positions; otherwise use static positions
+      const simPos = simVehiclePositions?.[v.wialon_id];
+      const lat = simPos?.lat ?? v.start_lat;
+      const lon = simPos?.lon ?? v.start_lon;
+      if (!lat || !lon) return;
 
-      const color = isHighlighted ? "#d4a017" : isFree ? "#3fb950" : "#f85149";
-      const size = isHighlighted ? 14 : 10;
+      const isHighlighted = highlightVehicleId === v.wialon_id;
+
+      let color: string;
+      if (simPos) {
+        // Sim mode: color by vehicle activity status
+        color = simPos.status === "traveling" ? "#d4a017"
+              : simPos.status === "working"   ? "#f85149"
+              : "#3fb950";
+      } else {
+        color = isHighlighted ? "#d4a017" : v.free_at_minutes === 0 ? "#3fb950" : "#f85149";
+      }
 
       const icon = L.divIcon({
         className: "",
-        html: `
-          <div style="position:relative;width:${size + 8}px;height:${size + 8}px;">
-            ${isHighlighted || isFree ? `
-              <div class="pulse-ring" style="
-                position:absolute;top:0;left:0;
-                width:${size + 8}px;height:${size + 8}px;
-                border-radius:50%;
-                background:${color};
-                opacity:0.3;
-              "></div>
-            ` : ""}
-            <div style="
-              position:absolute;
-              top:4px;left:4px;
-              width:${size}px;height:${size}px;
-              border-radius:50%;
-              background:${color};
-              border:2px solid ${isHighlighted ? "#fff" : "rgba(255,255,255,0.3)"};
-              box-shadow:0 0 8px ${color}66;
-            "></div>
-          </div>
-        `,
-        iconSize: [size + 8, size + 8],
-        iconAnchor: [(size + 8) / 2, (size + 8) / 2],
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))">
+          <path d="M16 1 C8.27 1 2 7.27 2 15 C2 25.25 16 39 16 39 C16 39 30 25.25 30 15 C30 7.27 23.73 1 16 1Z" fill="${color}"/>
+          <circle cx="16" cy="15" r="10" fill="white" opacity="0.95"/>
+          <rect x="9" y="8" width="14" height="14" rx="2.5" fill="${color}"/>
+          <rect x="13" y="8.8" width="6" height="1.2" rx="0.6" fill="white" opacity="0.7"/>
+          <rect x="11" y="10.5" width="10" height="6.5" rx="1" fill="white" opacity="0.9"/>
+          <rect x="7.2" y="10.5" width="1.8" height="3" rx="0.5" fill="${color}"/>
+          <rect x="23" y="10.5" width="1.8" height="3" rx="0.5" fill="${color}"/>
+          <circle cx="12" cy="20.5" r="1.8" fill="${color}"/>
+          <circle cx="12" cy="20.5" r="0.9" fill="white" opacity="0.85"/>
+          <circle cx="20" cy="20.5" r="1.8" fill="${color}"/>
+          <circle cx="20" cy="20.5" r="0.9" fill="white" opacity="0.85"/>
+        </svg>`,
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
       });
 
-      const shortName = v.name.length > 24 ? v.name.slice(0, 24) + "…" : v.name;
-
-      const marker = L.marker([v.start_lat, v.start_lon], { icon });
+      const marker = L.marker([lat, lon], { icon });
 
       if (onVehicleClick) {
         marker.on("click", () => onVehicleClick(v));
@@ -135,7 +168,7 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
 
       vehicleLayerRef.current.addLayer(marker);
     });
-  }, [L, vehicles, highlightVehicleId, onVehicleClick, onTaskClick]);
+  }, [L, vehicles, highlightVehicleId, simVehiclePositions, onVehicleClick]);
 
   // Draw tasks
   useEffect(() => {
@@ -146,20 +179,27 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
       if (!t.dest_lat || !t.dest_lon) return;
       const priorityColor = t.priority === "high" ? "#d4a017" : t.priority === "medium" ? "#1f6feb" : "#8b949e";
 
+      // In simulation mode, dim completed tasks and highlight active ones
+      const simStatus = simTaskStatuses?.[t.task_id];
+      const opacity = simStatus === "completed" ? 0.25 : 1;
+      const glowColor = simStatus === "active" ? "#3fb950" : priorityColor;
+      const size = simStatus === "active" ? 13 : 10;
+
       const icon = L.divIcon({
         className: "",
         html: `
           <div style="
-            width:10px;height:10px;
+            width:${size}px;height:${size}px;
             background:${priorityColor};
             border:2px solid rgba(255,255,255,0.4);
             border-radius:2px;
             transform:rotate(45deg);
-            box-shadow:0 0 6px ${priorityColor}88;
+            box-shadow:0 0 ${simStatus === "active" ? "10" : "6"}px ${glowColor}88;
+            opacity:${opacity};
           "></div>
         `,
-        iconSize: [10, 10],
-        iconAnchor: [5, 5],
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
       });
 
       const taskMarker = L.marker([t.dest_lat, t.dest_lon], { icon });
@@ -168,7 +208,7 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
       }
       taskMarker.addTo(taskLayerRef.current);
     });
-  }, [L, tasks]);
+  }, [L, tasks, simTaskStatuses]);
 
   // Draw route
   useEffect(() => {
@@ -222,6 +262,11 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
     }
   }, [L, route]);
 
+  useEffect(() => {
+    if (!mapRef.current || !flyTo) return;
+    mapRef.current.setView([flyTo.lat, flyTo.lon], flyTo.zoom ?? 15, { animate: true });
+  }, [flyTo?.stamp, flyTo?.lat, flyTo?.lon, flyTo?.zoom]);
+
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <div
@@ -255,7 +300,9 @@ export default function MapView({ vehicles, tasks, route, highlightVehicleId, on
           { color: "#d4a017", label: "Выбрана / маршрут" },
         ].map(({ color, label }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: color, border: "2px solid rgba(255,255,255,0.3)", flexShrink: 0 }} />
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="14" viewBox="0 0 32 40" style={{ flexShrink: 0 }}>
+              <path d="M16 1 C8.27 1 2 7.27 2 15 C2 25.25 16 39 16 39 C16 39 30 25.25 30 15 C30 7.27 23.73 1 16 1Z" fill={color}/>
+            </svg>
             <span style={{ fontSize: 11, color: "#8b949e" }}>{label}</span>
           </div>
         ))}

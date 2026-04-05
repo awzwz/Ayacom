@@ -5,6 +5,7 @@ import type {
   Task,
   HealthResponse,
   GroupingResult,
+  SimulationPlan,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -64,6 +65,12 @@ export const api = {
     if (priority) qs.set("priority", priority);
     return req<{ count: number; tasks: Task[] }>(`/api/tasks?${qs}`);
   },
+
+  simulation: (body?: { task_ids?: string[]; time_limit_seconds?: number; max_tasks?: number }) =>
+    req<SimulationPlan>("/api/simulation", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
 
   assign: (body: { wialon_id: number; task_id: string; duration_hours: number }) =>
     req<{ status: string; wialon_id: number; task_id: string; free_at_minutes: number }>(

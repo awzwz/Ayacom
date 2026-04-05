@@ -3,7 +3,15 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import {
-  Truck, Search, X, Zap, Wrench, ChevronRight, CheckCircle, Circle,
+  Truck,
+  BusFront,
+  Search,
+  X,
+  Zap,
+  Wrench,
+  ChevronRight,
+  CheckCircle,
+  Circle,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { api } from "@/lib/api";
@@ -13,12 +21,23 @@ const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 const FILTERS = ["Все", "Свободна", "Занята"] as const;
 
-function typeIcon(code: string) {
+function VehicleTypeIcon({ code, size = 22 }: { code: string; size?: number }) {
   const c = (code ?? "").toLowerCase();
-  if (c.includes("bus") || c.includes("авт")) return "🚌";
-  if (c.includes("truck") || c.includes("груз")) return "🚛";
-  if (c.includes("spec") || c.includes("спец")) return "🏗️";
-  return "🚗";
+  const iconProps = {
+    size,
+    className: "shrink-0" as const,
+    style: { color: "#c9d1d9" as const },
+    strokeWidth: 1.75 as const,
+  };
+  if (c.includes("truck") || c.includes("груз")) return <Truck {...iconProps} />;
+  if (c.includes("spec") || c.includes("спец"))
+    return (
+      <span className="text-xl leading-none select-none" aria-hidden>
+        🏗️
+      </span>
+    );
+  /* bus / автобус / прочие типы (в т.ч. техпомощь) — автобус спереди вместо красной машины */
+  return <BusFront {...iconProps} />;
 }
 
 function VehicleCard({ v, onClick }: { v: FleetVehicle; onClick: () => void }) {
@@ -35,8 +54,8 @@ function VehicleCard({ v, onClick }: { v: FleetVehicle; onClick: () => void }) {
       onMouseOut={(e) => (e.currentTarget.style.borderColor = "#21262d")}
     >
       <div className="flex items-start justify-between mb-3">
-        <div className="text-2xl w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: "#21262d" }}>
-          {typeIcon(v.vehicle_type_code)}
+        <div className="w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: "#21262d" }}>
+          <VehicleTypeIcon code={v.vehicle_type_code} />
         </div>
         <span
           className="text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -91,7 +110,9 @@ function VehicleModal({ v, onClose }: { v: FleetVehicle; onClose: () => void }) 
       >
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #21262d" }}>
           <div className="flex items-center gap-3">
-            <div className="text-2xl">{typeIcon(v.vehicle_type_code)}</div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-xl shrink-0" style={{ background: "#21262d" }}>
+              <VehicleTypeIcon code={v.vehicle_type_code} size={24} />
+            </div>
             <div>
               <div className="font-bold text-sm" style={{ color: "#e6edf3" }}>{v.name.split(" ").slice(1).join(" ") || v.name}</div>
               <div className="font-mono text-xs mt-0.5" style={{ color: "#8b949e" }}>{v.registration}</div>
