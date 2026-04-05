@@ -4,6 +4,8 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    env_file:
+      - .env
 
   frontend:
     build: ./is_uto_frontend

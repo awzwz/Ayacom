@@ -100,3 +100,41 @@ export interface GroupingResult {
   savings_percent: number;
   reason: string;
 }
+
+export interface BusinessCaseMetrics {
+  distance_km: number;
+  time_hours: number;
+  trips: number;
+  fuel_liters: number;
+  cost_kzt: number;
+}
+
+export interface BusinessCaseOptimized extends BusinessCaseMetrics {
+  groups: number;
+}
+
+export interface BusinessCaseSavings {
+  distance_km: number;
+  distance_pct: number;
+  time_hours: number;
+  fuel_liters: number;
+  cost_kzt: number;
+  co2_kg: number;
+  annual_cost_kzt: number;
+  annual_co2_tons: number;
+}
+
+export interface BusinessCaseMeta {
+  tasks_count: number;
+  vehicles_count: number;
+  field_name: string;
+  calculation_date: string;
+}
+
+export interface BusinessCaseResponse {
+  baseline: BusinessCaseMetrics;
+  optimized: BusinessCaseOptimized;
+  savings: BusinessCaseSavings;
+  meta: BusinessCaseMeta;
+  narrative: string;
+}

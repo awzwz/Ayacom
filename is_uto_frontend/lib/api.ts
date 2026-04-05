@@ -6,6 +6,7 @@ import type {
   HealthResponse,
   GroupingResult,
   SimulationPlan,
+  BusinessCaseResponse,
 } from "./types";
 
 /**
@@ -83,4 +84,15 @@ export const api = {
       "/api/assign",
       { method: "POST", body: JSON.stringify(body) }
     ),
+
+  businessCase: () => req<BusinessCaseResponse>("/api/analytics/business-case"),
+
+  analyticsChat: (body: {
+    messages: { role: string; content: string }[];
+    context?: BusinessCaseResponse;
+  }) =>
+    req<{ reply: string }>("/api/analytics/chat", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

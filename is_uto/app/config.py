@@ -35,6 +35,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 TASKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "tasks.csv")
 COMPATIBILITY_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "compatibility.json")
 
+# Business-case constants (Kazakhstan oil-field industry averages)
+FUEL_RATE_L_PER_100KM = 35.0        # heavy special equipment
+DIESEL_PRICE_KZT = 295.0            # Q1 2026, Kazakhstan (₸/litre)
+CO2_KG_PER_LITER = 2.68             # diesel emission factor
+DRIVER_COST_KZT_PER_HOUR = 2500.0   # operator hourly rate
+
 # Planning horizon start (fixed reference point for all time calculations)
 # All times (free_at, tw_start, etc.) are in minutes offset from this datetime.
 from datetime import datetime as _dt

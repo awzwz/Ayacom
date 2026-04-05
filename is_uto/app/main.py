@@ -137,11 +137,13 @@ from app.api.recommendations import router as rec_router
 from app.api.route import router as route_router
 from app.api.multitask import router as mt_router
 from app.api.simulation import router as sim_router
+from app.api.analytics import router as analytics_router
 
 app.include_router(rec_router, prefix="/api", tags=["Recommendations"])
 app.include_router(route_router, prefix="/api", tags=["Route"])
 app.include_router(mt_router, prefix="/api", tags=["Multi-task"])
 app.include_router(sim_router, prefix="/api", tags=["Simulation"])
+app.include_router(analytics_router, prefix="/api", tags=["Analytics"])
 
 
 # ─── Utility endpoints ────────────────────────────────────────────────────────

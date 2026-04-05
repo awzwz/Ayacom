@@ -1,43 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
+import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
+import AnalyticsChat from "@/components/AnalyticsChat";
 import { api } from "@/lib/api";
-import { TrendingUp, TrendingDown, Calendar, Download } from "lucide-react";
-import type { HealthResponse } from "@/lib/types";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
-  Tooltip, ResponsiveContainer, CartesianGrid,
+  TrendingUp, TrendingDown, Calendar, Download,
+  Fuel, Clock, MapPin, DollarSign, Leaf, Sparkles, Loader2,
+  FileText, Table,
+} from "lucide-react";
+import type { HealthResponse, BusinessCaseResponse } from "@/lib/types";
+import {
+  BarChart, Bar, XAxis, YAxis,
+  Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 
-const HOURS = ["08", "10", "12", "14", "16", "18", "20"];
-const etaData = HOURS.map((h, i) => ({
-  hour: `${h}:00`,
-  forecast: 20 + Math.sin(i * 0.8) * 8 + i * 1.5,
-  actual: 18 + Math.sin(i * 0.8 + 0.3) * 6 + i * 1.2 + Math.random() * 3,
-}));
-
-const vehicleTypes = [
-  { type: "Тяжеловозы", pct: 88 },
-  { type: "Рефрижераторы", pct: 64 },
-  { type: "Малотоннажные", pct: 42 },
-  { type: "Спецтехника", pct: 15 },
-];
-
-const DAYS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
-const HEAT_HOURS = Array.from({ length: 12 }, (_, i) => `${(i * 2).toString().padStart(2, "0")}:00`);
-const heatData = DAYS.map((day) =>
-  HEAT_HOURS.map((_, hi) => ({
-    value: hi >= 3 && hi <= 8 ? Math.random() * 0.7 + 0.3 : Math.random() * 0.3,
-  }))
-);
+function fmt(n: number | undefined, decimals = 0): string {
+  if (n === undefined || n === null) return "—";
+  return n.toLocaleString("ru-RU", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
 
 function KPICard({
-  label, value, unit, delta, deltaLabel, accent, inverted,
+  label, value, unit, delta, deltaLabel, accent, inverted, icon: Icon,
 }: {
   label: string; value: string | number; unit?: string;
   delta?: number; deltaLabel?: string; accent?: boolean; inverted?: boolean;
+  icon?: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
 }) {
   const positive = delta !== undefined && delta > 0;
   return (
@@ -48,8 +39,11 @@ function KPICard({
         border: `1px solid ${inverted ? "#30363d" : "#21262d"}`,
       }}
     >
-      <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: inverted ? "#8b949e" : "#484f58" }}>
-        {label}
+      <div className="flex items-center gap-2 mb-3">
+        {Icon && <Icon size={14} style={{ color: "#484f58" }} />}
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: inverted ? "#8b949e" : "#484f58" }}>
+          {label}
+        </span>
       </div>
       <div className="flex items-end gap-2 mb-2">
         <span className="text-4xl font-bold" style={{ color: accent ? "#d4a017" : "#e6edf3" }}>
@@ -73,34 +67,193 @@ function KPICard({
   );
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+function SavingsCard({
+  label, value, unit, sub, icon: Icon, color,
+}: {
+  label: string; value: string; unit: string; sub?: string;
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  color: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-5 flex-1"
+      style={{ background: "#0d1117", border: `1px solid ${color}33` }}
+    >
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+        style={{ background: `${color}18` }}
+      >
+        <Icon size={20} style={{ color }} />
+      </div>
+      <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#8b949e" }}>
+        {label}
+      </div>
+      <div className="flex items-end gap-1.5">
+        <span className="text-3xl font-bold" style={{ color: "#e6edf3" }}>{value}</span>
+        <span className="text-sm mb-0.5" style={{ color: "#8b949e" }}>{unit}</span>
+      </div>
+      {sub && (
+        <div className="text-xs mt-2" style={{ color: "#8b949e" }}>{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function Skeleton({ w = "100%", h = 20 }: { w?: string | number; h?: number }) {
+  return (
+    <div
+      className="rounded-lg animate-pulse"
+      style={{ width: w, height: h, background: "#21262d" }}
+    />
+  );
+}
+
+const ComparisonTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, padding: "8px 12px" }}>
       <p style={{ color: "#8b949e", fontSize: 11, marginBottom: 4 }}>{label}</p>
       {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color, fontSize: 12, fontWeight: 600 }}>
-          {p.name === "forecast" ? "Прогноз" : "Факт"}: {p.value.toFixed(1)} мин
+        <p key={p.name} style={{ color: p.fill, fontSize: 12, fontWeight: 600 }}>
+          {p.name}: {p.value.toLocaleString("ru-RU")}
         </p>
       ))}
     </div>
   );
 };
 
+function exportCSV(bc: BusinessCaseResponse) {
+  const rows = [
+    ["Метрика", "Без оптимизации", "IS УТО", "Экономия"],
+    ["Дистанция (км)", bc.baseline.distance_km, bc.optimized.distance_km, bc.savings.distance_km],
+    ["Время (ч)", bc.baseline.time_hours, bc.optimized.time_hours, bc.savings.time_hours],
+    ["Топливо (л)", bc.baseline.fuel_liters, bc.optimized.fuel_liters, bc.savings.fuel_liters],
+    ["Стоимость (₸)", bc.baseline.cost_kzt, bc.optimized.cost_kzt, bc.savings.cost_kzt],
+    ["CO₂ (кг)", "", "", bc.savings.co2_kg],
+    [],
+    ["Экономия дистанции (%)", bc.savings.distance_pct],
+    ["Годовая экономия (₸)", bc.savings.annual_cost_kzt],
+    ["Годовое снижение CO₂ (т)", bc.savings.annual_co2_tons],
+    [],
+    ["Машин", bc.meta.vehicles_count],
+    ["Задач", bc.meta.tasks_count],
+    ["Месторождение", bc.meta.field_name],
+    ["Дата расчёта", bc.meta.calculation_date],
+    [],
+    ["AI-нарратив"],
+    [bc.narrative],
+  ];
+  const csv = rows.map((r) => r.join(";")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `IS_UTO_business_case_${bc.meta.calculation_date.slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function exportPDF(bc: BusinessCaseResponse) {
+  const { default: jsPDF } = await import("jspdf");
+  await import("jspdf-autotable");
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  doc.setFontSize(18);
+  doc.text("IS UTO — Business Case", 14, 20);
+  doc.setFontSize(10);
+  doc.text(`${bc.meta.field_name} | ${bc.meta.calculation_date}`, 14, 28);
+  doc.text(`Vehicles: ${bc.meta.vehicles_count} | Tasks: ${bc.meta.tasks_count}`, 14, 34);
+
+  (doc as any).autoTable({
+    startY: 42,
+    head: [["Metric", "Baseline", "IS UTO", "Savings"]],
+    body: [
+      ["Distance (km)", bc.baseline.distance_km, bc.optimized.distance_km, `${bc.savings.distance_km} (${bc.savings.distance_pct}%)`],
+      ["Time (h)", bc.baseline.time_hours, bc.optimized.time_hours, bc.savings.time_hours],
+      ["Fuel (L)", bc.baseline.fuel_liters, bc.optimized.fuel_liters, bc.savings.fuel_liters],
+      ["Cost (KZT)", fmt(bc.baseline.cost_kzt), fmt(bc.optimized.cost_kzt), fmt(bc.savings.cost_kzt)],
+      ["CO2 (kg)", "—", "—", bc.savings.co2_kg],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [31, 111, 235] },
+    styles: { fontSize: 9 },
+  });
+
+  const afterTable = (doc as any).lastAutoTable.finalY + 10;
+  doc.setFontSize(11);
+  doc.text("Annual projections", 14, afterTable);
+  doc.setFontSize(9);
+  doc.text(`Cost savings: ${fmt(bc.savings.annual_cost_kzt)} KZT/year`, 14, afterTable + 7);
+  doc.text(`CO2 reduction: ${bc.savings.annual_co2_tons} tons/year`, 14, afterTable + 13);
+
+  if (bc.narrative) {
+    doc.setFontSize(11);
+    doc.text("AI Narrative", 14, afterTable + 24);
+    doc.setFontSize(9);
+    const lines = doc.splitTextToSize(bc.narrative, 180);
+    doc.text(lines, 14, afterTable + 31);
+  }
+
+  doc.save(`IS_UTO_business_case_${bc.meta.calculation_date.slice(0, 10)}.pdf`);
+}
+
 export default function AnalyticsPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [bc, setBc] = useState<BusinessCaseResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => {});
+    api
+      .businessCase()
+      .then((data) => {
+        setBc(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message ?? "Ошибка загрузки бизнес-кейса");
+        setLoading(false);
+      });
   }, []);
 
-  const heatColor = (v: number) => {
-    if (v < 0.2) return "#161b22";
-    if (v < 0.4) return "#1f6feb33";
-    if (v < 0.6) return "#1f6feb88";
-    if (v < 0.8) return "#1f6febbe";
-    return "#1f6feb";
-  };
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
+
+  const comparisonData = bc
+    ? [
+        {
+          metric: "Дистанция (км)",
+          "Без оптимизации": bc.baseline.distance_km,
+          "IS УТО": bc.optimized.distance_km,
+        },
+        {
+          metric: "Время (ч)",
+          "Без оптимизации": bc.baseline.time_hours,
+          "IS УТО": bc.optimized.time_hours,
+        },
+        {
+          metric: "Топливо (л)",
+          "Без оптимизации": bc.baseline.fuel_liters,
+          "IS УТО": bc.optimized.fuel_liters,
+        },
+        {
+          metric: "Стоимость (тыс. ₸)",
+          "Без оптимизации": Math.round(bc.baseline.cost_kzt / 1000),
+          "IS УТО": Math.round(bc.optimized.cost_kzt / 1000),
+        },
+      ]
+    : [];
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "#0d1117" }}>
@@ -113,7 +266,9 @@ export default function AnalyticsPage() {
             <div>
               <h1 className="text-2xl font-bold" style={{ color: "#e6edf3" }}>Аналитический отчёт</h1>
               <p className="text-sm mt-1" style={{ color: "#8b949e" }}>
-                Системные показатели за последние 24 часа
+                {bc
+                  ? `Бизнес-кейс · ${bc.meta.field_name} · ${new Date(bc.meta.calculation_date).toLocaleDateString("ru-RU")}`
+                  : "Системные показатели"}
               </p>
             </div>
             <div className="flex gap-2">
@@ -124,13 +279,39 @@ export default function AnalyticsPage() {
                 <Calendar size={14} />
                 Сегодня
               </button>
-              <button
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
-                style={{ background: "#d4a017", color: "#0d1117" }}
-              >
-                <Download size={14} />
-                Экспорт
-              </button>
+              <div className="relative" ref={exportRef}>
+                <button
+                  onClick={() => setExportOpen((v) => !v)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+                  style={{ background: "#d4a017", color: "#0d1117" }}
+                >
+                  <Download size={14} />
+                  Экспорт
+                </button>
+                {exportOpen && bc && (
+                  <div
+                    className="absolute right-0 mt-2 rounded-xl overflow-hidden z-50"
+                    style={{ background: "#161b22", border: "1px solid #30363d", minWidth: 180 }}
+                  >
+                    <button
+                      onClick={() => { exportPDF(bc); setExportOpen(false); }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-sm text-left hover:bg-[#21262d] transition-colors"
+                      style={{ color: "#e6edf3" }}
+                    >
+                      <FileText size={14} style={{ color: "#1f6feb" }} />
+                      Скачать PDF
+                    </button>
+                    <button
+                      onClick={() => { exportCSV(bc); setExportOpen(false); }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-sm text-left hover:bg-[#21262d] transition-colors"
+                      style={{ color: "#e6edf3", borderTop: "1px solid #21262d" }}
+                    >
+                      <Table size={14} style={{ color: "#3fb950" }} />
+                      Скачать CSV
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -138,140 +319,217 @@ export default function AnalyticsPage() {
         <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
           {/* KPI cards */}
           <div className="flex gap-4">
-            <KPICard label="Всего машин" value={health?.vehicles ?? "—"} delta={2} deltaLabel="сегодня" />
-            <KPICard label="Активные заявки" value={health?.tasks ?? "—"} delta={12} deltaLabel="%" />
-            <KPICard label="Среднее ETA" value={28} unit="мин" delta={-4} deltaLabel="мин" />
-            <KPICard label="Экономия топлива" value="14.2" unit="%" accent inverted />
+            <KPICard
+              icon={MapPin}
+              label="Всего машин"
+              value={health?.vehicles ?? "—"}
+              delta={bc ? bc.meta.vehicles_count : undefined}
+              deltaLabel="в расчёте"
+            />
+            <KPICard
+              icon={Clock}
+              label="Активные заявки"
+              value={health?.tasks ?? "—"}
+              delta={bc ? bc.meta.tasks_count : undefined}
+              deltaLabel="в расчёте"
+            />
+            <KPICard
+              icon={TrendingDown}
+              label="Экономия дистанции"
+              value={loading ? "—" : bc ? `${fmt(bc.savings.distance_pct, 1)}` : "—"}
+              unit="%"
+              delta={bc ? bc.savings.distance_km : undefined}
+              deltaLabel="км/день"
+            />
+            <KPICard
+              icon={Fuel}
+              label="Экономия топлива"
+              value={loading ? "—" : bc ? fmt(bc.savings.fuel_liters, 1) : "—"}
+              unit="л/день"
+              accent
+              inverted
+            />
           </div>
 
-          {/* Charts row */}
-          <div className="flex gap-4" style={{ height: 280 }}>
-            {/* ETA chart */}
+          {/* Error message */}
+          {error && (
             <div
-              className="flex-1 rounded-2xl p-5"
-              style={{ background: "#0d1117", border: "1px solid #21262d" }}
+              className="rounded-xl p-4 text-sm"
+              style={{ background: "#3d1f1f", border: "1px solid #6e3630", color: "#f87171" }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold" style={{ color: "#e6edf3" }}>
-                  ETA по часам планирования
-                </h2>
-                <div className="flex items-center gap-4 text-xs" style={{ color: "#8b949e" }}>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-0.5 rounded" style={{ background: "#e6edf3" }} />
-                    Прогноз
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-0.5 rounded border-t-2 border-dashed" style={{ borderColor: "#d4a017" }} />
-                    Факт
-                  </span>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height="80%">
-                <AreaChart data={etaData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#e6edf3" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#e6edf3" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradActual" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#d4a017" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#d4a017" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="#21262d" strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" tick={{ fill: "#484f58", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#484f58", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="forecast" stroke="#e6edf3" strokeWidth={2} fill="url(#gradForecast)" name="forecast" dot={false} />
-                  <Area type="monotone" dataKey="actual" stroke="#d4a017" strokeWidth={2} strokeDasharray="6 4" fill="url(#gradActual)" name="actual" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+              {error}
             </div>
+          )}
 
-            {/* Vehicle load */}
+          {/* Savings section */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4" style={{ color: "#e6edf3" }}>
+              Экономический эффект
+            </h2>
+            {loading ? (
+              <div className="flex gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex-1 rounded-2xl p-5" style={{ background: "#0d1117", border: "1px solid #21262d" }}>
+                    <Skeleton w={40} h={40} />
+                    <Skeleton w="60%" h={12} />
+                    <Skeleton w="80%" h={28} />
+                  </div>
+                ))}
+              </div>
+            ) : bc ? (
+              <div className="flex gap-4">
+                <SavingsCard
+                  icon={MapPin}
+                  label="Дистанция"
+                  value={fmt(bc.savings.distance_km, 1)}
+                  unit="км/день"
+                  sub={`${fmt(bc.savings.distance_pct, 1)}% от базового маршрута`}
+                  color="#1f6feb"
+                />
+                <SavingsCard
+                  icon={Fuel}
+                  label="Топливо"
+                  value={fmt(bc.savings.fuel_liters, 1)}
+                  unit="л/день"
+                  sub={`−${fmt(bc.savings.co2_kg, 1)} кг CO₂/день`}
+                  color="#d4a017"
+                />
+                <SavingsCard
+                  icon={Clock}
+                  label="Время"
+                  value={fmt(bc.savings.time_hours, 1)}
+                  unit="ч/день"
+                  sub="Сокращение простоев"
+                  color="#3fb950"
+                />
+                <SavingsCard
+                  icon={DollarSign}
+                  label="Стоимость"
+                  value={fmt(bc.savings.cost_kzt)}
+                  unit="₸/день"
+                  sub="Топливо + ФОТ водителей"
+                  color="#f78166"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {/* Comparison chart */}
+          {bc && (
             <div
               className="rounded-2xl p-5"
-              style={{ width: 280, background: "#0d1117", border: "1px solid #21262d" }}
+              style={{ background: "#0d1117", border: "1px solid #21262d" }}
             >
               <h2 className="text-sm font-semibold mb-4" style={{ color: "#e6edf3" }}>
-                Загрузка по типам техники
+                Baseline vs IS УТО
               </h2>
-              <div className="space-y-4">
-                {vehicleTypes.map(({ type, pct }) => (
-                  <div key={type}>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span style={{ color: "#8b949e" }}>{type}</span>
-                      <span className="font-semibold" style={{ color: "#e6edf3" }}>{pct}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full" style={{ background: "#21262d" }}>
-                      <div
-                        className="h-1.5 rounded-full score-bar-fill"
-                        style={{
-                          width: `${pct}%`,
-                          background: pct >= 80 ? "#d4a017" : pct >= 50 ? "#1f6feb" : "#8b949e",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
+                    <CartesianGrid stroke="#21262d" strokeDasharray="3 3" />
+                    <XAxis dataKey="metric" tick={{ fill: "#8b949e", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#484f58", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<ComparisonTooltip />} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 12, color: "#8b949e" }}
+                      iconType="circle"
+                      iconSize={8}
+                    />
+                    <Bar dataKey="Без оптимизации" fill="#484f58" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="IS УТО" fill="#1f6feb" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Annual projections */}
+          {bc && (
+            <div className="flex gap-4">
+              <div
+                className="flex-1 rounded-2xl p-5"
+                style={{ background: "#161b22", border: "1px solid #30363d" }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign size={14} style={{ color: "#d4a017" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#8b949e" }}>
+                    Годовая экономия
+                  </span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-bold" style={{ color: "#d4a017" }}>
+                    {fmt(bc.savings.annual_cost_kzt)}
+                  </span>
+                  <span className="text-sm mb-0.5" style={{ color: "#8b949e" }}>₸ / год</span>
+                </div>
               </div>
               <div
-                className="mt-5 pt-4 flex justify-between text-xs"
-                style={{ borderTop: "1px solid #21262d" }}
+                className="flex-1 rounded-2xl p-5"
+                style={{ background: "#161b22", border: "1px solid #30363d" }}
               >
-                <span style={{ color: "#8b949e" }}>Общая загрузка</span>
-                <span className="font-bold text-base" style={{ color: "#d4a017" }}>62.4%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Heatmap */}
-          <div
-            className="rounded-2xl p-5"
-            style={{ background: "#0d1117", border: "1px solid #21262d" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: "#e6edf3" }}>Интенсивность заявок</h2>
-                <p className="text-xs mt-0.5" style={{ color: "#484f58" }}>Активность по дням и часам</p>
-              </div>
-              <div className="flex items-center gap-2 text-xs" style={{ color: "#484f58" }}>
-                <span>Низкая</span>
-                {[0.1, 0.35, 0.6, 0.85, 1.0].map((v) => (
-                  <div key={v} className="w-4 h-4 rounded" style={{ background: heatColor(v) }} />
-                ))}
-                <span>Высокая</span>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 640 }}>
-                {/* Hour labels */}
-                <div className="flex gap-1 mb-1 ml-10">
-                  {HEAT_HOURS.map((h) => (
-                    <div key={h} className="flex-1 text-center text-xs" style={{ color: "#484f58", fontSize: 10 }}>
-                      {h}
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 mb-2">
+                  <Leaf size={14} style={{ color: "#3fb950" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#8b949e" }}>
+                    Снижение CO₂ в год
+                  </span>
                 </div>
-                {/* Grid */}
-                {DAYS.map((day, di) => (
-                  <div key={day} className="flex items-center gap-1 mb-1">
-                    <div className="w-8 text-xs text-right shrink-0" style={{ color: "#8b949e" }}>{day}</div>
-                    {heatData[di].map((cell, hi) => (
-                      <div
-                        key={hi}
-                        className="flex-1 rounded"
-                        style={{ height: 24, background: heatColor(cell.value), cursor: "default", minWidth: 24 }}
-                        title={`${day} ${HEAT_HOURS[hi]}: ${(cell.value * 100).toFixed(0)}%`}
-                      />
-                    ))}
-                  </div>
-                ))}
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-bold" style={{ color: "#3fb950" }}>
+                    {fmt(bc.savings.annual_co2_tons, 1)}
+                  </span>
+                  <span className="text-sm mb-0.5" style={{ color: "#8b949e" }}>тонн / год</span>
+                </div>
               </div>
             </div>
+          )}
+
+          {/* AI narrative */}
+          <div
+            className="rounded-2xl p-6"
+            style={{
+              background: "#0d1117",
+              border: "1px solid #d4a01744",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles size={18} style={{ color: "#d4a017" }} />
+              <h2 className="text-sm font-semibold" style={{ color: "#e6edf3" }}>
+                AI-анализ для питча
+              </h2>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "#d4a01722", color: "#d4a017" }}
+              >
+                GPT-4o
+              </span>
+            </div>
+            {loading ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs" style={{ color: "#8b949e" }}>
+                  <Loader2 size={12} className="animate-spin" />
+                  Генерация нарратива...
+                </div>
+                <Skeleton h={16} />
+                <Skeleton h={16} />
+                <Skeleton h={16} w="70%" />
+              </div>
+            ) : bc?.narrative ? (
+              <p
+                className="text-base leading-relaxed"
+                style={{ color: "#c9d1d9", lineHeight: 1.8 }}
+              >
+                {bc.narrative}
+              </p>
+            ) : (
+              <p className="text-sm" style={{ color: "#484f58" }}>
+                Нарратив недоступен
+              </p>
+            )}
           </div>
         </div>
       </div>
+
+      <AnalyticsChat bc={bc} />
     </div>
   );
 }
