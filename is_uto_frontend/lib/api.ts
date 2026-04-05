@@ -8,7 +8,13 @@ import type {
   SimulationPlan,
 } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+/**
+ * Prefer explicit public URL when the browser must talk to the API host directly.
+ * Otherwise use the Next.js proxy (`app/uto-api`) so Docker/runtime `UTO_API_ORIGIN`
+ * is applied — `next.config` rewrites use BACKEND_URL only at build time and often
+ * miss local `backend:8000`, which breaks POST /api/simulation (405 / wrong host).
+ */
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "/uto-api";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
