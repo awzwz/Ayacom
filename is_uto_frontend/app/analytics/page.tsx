@@ -500,7 +500,7 @@ export default function AnalyticsPage() {
                 className="text-xs px-2 py-0.5 rounded-full"
                 style={{ background: "#d4a01722", color: "#d4a017" }}
               >
-                GPT-4o
+                AI
               </span>
             </div>
             {loading ? (

@@ -304,7 +304,7 @@ export default function MobileAnalyticsPage() {
               <span style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", flex: 1, textAlign: "left" }}>
                 Анализ от ИИ
               </span>
-              <span style={{ fontSize: 10, color: "#484f58", marginRight: 4 }}>GPT-4o</span>
+              <span style={{ fontSize: 10, color: "#484f58", marginRight: 4 }}>AI</span>
               {narrativeOpen ? (
                 <ChevronUp size={16} color="#484f58" />
               ) : (
